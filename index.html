@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PPIC & Inventory Control System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0f0d;
+  --surface: #111710;
+  --surface2: #172014;
+  --border: #1f2e20;
+  --border2: #2a3f2c;
+  --green: #4ade80;
+  --green2: #22c55e;
+  --green-dim: #16a34a;
+  --green-glow: rgba(74,222,128,0.12);
+  --amber: #fbbf24;
+  --amber-dim: rgba(251,191,36,0.15);
+  --red: #f87171;
+  --red-dim: rgba(248,113,113,0.12);
+  --blue: #60a5fa;
+  --text: #e2f0e4;
+  --text2: #7a9e7e;
+  --text3: #4a6b4e;
+  --mono: 'DM Mono', monospace;
+  --sans: 'Syne', sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::before {
+  content:'';
+  position:fixed; inset:0; z-index:1000; pointer-events:none;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+}
+
+/* Grid background */
+.grid-bg {
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(74,222,128,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74,222,128,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.app { position:relative; z-index:1; }
+
+/* ── TOP BAR ── */
+.topbar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10,15,13,0.95);
+  backdrop-filter: blur(12px);
+  position:sticky; top:0; z-index:100;
+}
+
+.brand {
+  display:flex; align-items:center; gap:10px;
+}
+
+.brand-icon {
+  width:32px; height:32px;
+  border: 1px solid var(--green-dim);
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px;
+  background: var(--green-glow);
+  animation: pulse-border 3s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+  0%,100% { border-color: var(--green-dim); box-shadow: none; }
+  50% { border-color: var(--green); box-shadow: 0 0 12px rgba(74,222,128,0.2); }
+}
+
+.brand-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--green);
+  letter-spacing: 1px;
+}
+
+.brand-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 2px;
+}
+
+.status-bar {
+  display:flex; align-items:center; gap:20px;
+}
+
+.status-pill {
+  display:flex; align-items:center; gap:6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+}
+
+.dot {
+  width:6px; height:6px; border-radius:50%;
+  background: var(--green);
+  animation: blink 2s ease-in-out infinite;
+}
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.clock {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text2);
+}
+
+/* ── LAYOUT ── */
+.layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  min-height: calc(100vh - 53px);
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  border-right: 1px solid var(--border);
+  padding: 20px 0;
+}
+
+.nav-section {
+  padding: 0 16px;
+  margin-bottom: 24px;
+}
+
+.nav-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--text3);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  padding: 0 8px;
+}
+
+.nav-item {
+  display:flex; align-items:center; gap:10px;
+  padding: 9px 12px;
+  border-radius: 2px;
+  cursor:pointer;
+  transition: background 0.2s, color 0.2s;
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+}
+
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+
+.nav-item.active {
+  background: var(--green-glow);
+  border-color: var(--border2);
+  color: var(--green);
+}
+
+.nav-item .icon { font-size:15px; width:18px; text-align:center; }
+
+.nav-badge {
+  margin-left:auto;
+  background: var(--amber-dim);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+
+.nav-badge.red { background: var(--red-dim); color: var(--red); }
+
+/* ── MAIN ── */
+.main {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+/* Page visibility */
+.page { display:none; }
+.page.active { display:block; }
+
+/* ── DASHBOARD ── */
+.page-header {
+  margin-bottom: 24px;
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+.page-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+
+.page-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+
+/* KPI Cards */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 16px;
+  position:relative;
+  overflow:hidden;
+  animation: fadeIn 0.4s ease both;
+  transition: border-color 0.2s, transform 0.2s;
+  cursor:default;
+}
+
+.kpi:hover { border-color: var(--border2); transform: translateY(-2px); }
+
+.kpi::after {
+  content:'';
+  position:absolute; bottom:0; left:0; right:0;
+  height:2px;
+  background: var(--kpi-color, var(--green));
+  opacity:0.6;
+}
+
+.kpi-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text3);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.kpi-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--kpi-color, var(--green));
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.kpi-delta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+}
+
+.kpi-delta span { color: var(--green); }
+.kpi-delta span.neg { color: var(--red); }
+
+/* Charts row */
+.charts-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 20px;
+  animation: fadeIn 0.5s ease both;
+}
+
+.card-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text2);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+
+.card-badge {
+  font-size: 9px;
+  padding: 2px 6px;
+  background: var(--green-glow);
+  color: var(--green);
+  border: 1px solid var(--border2);
+}
+
+/* Bar chart */
+.bar-chart {
+  display:flex; align-items:flex-end; gap:8px; height:120px;
+}
+
+.bar-group { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+
+.bar-wrap { flex:1; width:100%; display:flex; align-items:flex-end; }
+
+.bar {
+  width:100%; border-radius:1px 1px 0 0;
+  background: linear-gradient(to top, var(--green-dim), var(--green));
+  transition: height 0.8s cubic-bezier(0.34,1.56,0.64,1);
+  position:relative;
+}
+
+.bar.plan { background: linear-gradient(to top, #1e3a5f, var(--blue)); opacity:0.6; }
+
+.bar-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text3);
+}
+
+/* Donut chart */
+.donut-wrap { display:flex; align-items:center; gap:20px; }
+
+.donut {
+  width:100px; height:100px; flex-shrink:0;
+  position:relative;
+}
+
+.donut svg { transform: rotate(-90deg); }
+
+.donut-center {
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+
+.donut-pct { font-size:18px; font-weight:800; color:var(--green); }
+.donut-lbl { font-family:var(--mono); font-size:8px; color:var(--text3); letter-spacing:1px; }
+
+.legend { display:flex; flex-direction:column; gap:8px; }
+.legend-item { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2); }
+.legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+/* Table */
+.data-table { width:100%; border-collapse:collapse; }
+
+.data-table th {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text3);
+  text-transform: uppercase;
+  padding: 8px 12px;
+  text-align:left;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table td {
+  padding: 10px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+}
+
+.data-table tr:hover td { background: var(--surface2); color: var(--text); }
+
+.data-table td:first-child { font-family:var(--mono); color:var(--text); font-size:12px; }
+
+.badge {
+  display:inline-block;
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  border-radius: 2px;
+}
+
+.badge.ok   { background:rgba(74,222,128,0.12); color:var(--green); border:1px solid rgba(74,222,128,0.2); }
+.badge.warn { background:var(--amber-dim); color:var(--amber); border:1px solid rgba(251,191,36,0.2); }
+.badge.crit { background:var(--red-dim); color:var(--red); border:1px solid rgba(248,113,113,0.2); }
+
+.progress-bar {
+  height:4px; background:var(--border); border-radius:2px; overflow:hidden; width:80px;
+}
+.progress-fill { height:100%; border-radius:2px; transition: width 1s ease; }
+.progress-fill.green { background:var(--green); }
+.progress-fill.amber { background:var(--amber); }
+.progress-fill.red   { background:var(--red);   }
+
+/* ── INVENTORY PAGE ── */
+.toolbar {
+  display:flex; align-items:center; gap:12px;
+  margin-bottom: 20px;
+}
+
+.search-box {
+  flex:1; display:flex; align-items:center; gap:8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+}
+
+.search-box input {
+  background:none; border:none; outline:none;
+  color:var(--text); font-family:var(--mono); font-size:12px;
+  width:100%;
+}
+
+.search-box input::placeholder { color:var(--text3); }
+
+.btn {
+  padding: 8px 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  cursor:pointer;
+  border: 1px solid var(--border2);
+  background: var(--surface);
+  color: var(--text2);
+  transition: all 0.2s;
+}
+
+.btn:hover { background:var(--surface2); color:var(--text); border-color:var(--green-dim); }
+.btn.primary { background:var(--green-glow); color:var(--green); border-color:var(--green-dim); }
+.btn.primary:hover { background:rgba(74,222,128,0.2); }
+
+/* Filter chips */
+.filter-chips { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+.chip {
+  padding:4px 12px; font-family:var(--mono); font-size:10px; letter-spacing:1px;
+  border:1px solid var(--border); color:var(--text3); cursor:pointer;
+  transition:all 0.2s; border-radius:2px;
+}
+.chip:hover { border-color:var(--border2); color:var(--text2); }
+.chip.active { border-color:var(--green-dim); color:var(--green); background:var(--green-glow); }
+
+/* MRP Page */
+.mrp-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+
+.mrp-card {
+  background:var(--surface); border:1px solid var(--border); padding:20px;
+}
+
+.mrp-form-row {
+  display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;
+}
+
+.form-group { display:flex; flex-direction:column; gap:4px; }
+
+.form-label {
+  font-family:var(--mono); font-size:9px; letter-spacing:2px;
+  color:var(--text3); text-transform:uppercase;
+}
+
+.form-input {
+  background:var(--bg); border:1px solid var(--border);
+  padding:8px 10px; color:var(--text); font-family:var(--mono); font-size:12px;
+  outline:none; transition:border-color 0.2s;
+}
+
+.form-input:focus { border-color:var(--green-dim); }
+
+.mrp-result {
+  background:var(--surface2); border:1px solid var(--border2);
+  padding:16px; margin-top:12px;
+}
+
+.mrp-result-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:6px 0; border-bottom:1px solid var(--border);
+}
+
+.mrp-result-row:last-child { border-bottom:none; }
+.mrp-result-row .key { font-family:var(--mono); font-size:11px; color:var(--text3); }
+.mrp-result-row .val { font-family:var(--mono); font-size:12px; color:var(--green); font-weight:500; }
+
+/* Alert banner */
+.alert-banner {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 14px; margin-bottom:12px;
+  border: 1px solid;
+  font-size:13px;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+
+.alert-banner.warn { border-color:rgba(251,191,36,0.3); background:var(--amber-dim); color:var(--amber); }
+.alert-banner.crit { border-color:rgba(248,113,113,0.3); background:var(--red-dim); color:var(--red); }
+.alert-banner.ok   { border-color:rgba(74,222,128,0.3); background:var(--green-glow); color:var(--green); }
+
+/* Footer bar */
+.footer-bar {
+  border-top:1px solid var(--border);
+  padding:8px 24px;
+  display:flex; align-items:center; justify-content:space-between;
+  font-family:var(--mono); font-size:10px; color:var(--text3);
+  letter-spacing:1px;
+}
+
+.footer-tag { color:var(--green); }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="app">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-icon">⬡</div>
+    <div>
+      <div class="brand-name">PPIC-ICS v2.4</div>
+      <div class="brand-sub">Production Planning & Inventory Control</div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="status-pill"><div class="dot"></div> SISTEM AKTIF</div>
+    <div class="status-pill">PT MANUFAKTUR JAYA</div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="nav-section">
+      <div class="nav-label">Utama</div>
+      <div class="nav-item active" onclick="showPage('dashboard', this)">
+        <span class="icon">▤</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showPage('inventory', this)">
+        <span class="icon">◫</span> Inventaris
+        <span class="nav-badge red">3</span>
+      </div>
+      <div class="nav-item" onclick="showPage('mrp', this)">
+        <span class="icon">◈</span> MRP
+      </div>
+      <div class="nav-item" onclick="showPage('produksi', this)">
+        <span class="icon">◉</span> Produksi
+        <span class="nav-badge">2</span>
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Laporan</div>
+      <div class="nav-item" onclick="showPage('laporan', this)">
+        <span class="icon">▦</span> Laporan
+      </div>
+    </div>
+    <div class="nav-section" style="margin-top:auto; padding-top:20px;">
+      <div class="nav-label">Info</div>
+      <div class="nav-item" style="font-size:11px; color:var(--text3); cursor:default; flex-direction:column; align-items:flex-start; gap:2px;">
+        <span style="color:var(--text2)">Nurhidayat C.P.</span>
+        <span style="font-family:var(--mono); font-size:9px;">PPIC Specialist</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main">
+
+    <!-- DASHBOARD PAGE -->
+    <div id="page-dashboard" class="page active">
+      <div class="page-header">
+        <div class="page-title">Dashboard Operasional</div>
+        <div class="page-sub">// PERIODE: JUNI 2026 · UPDATE REAL-TIME</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi" style="--kpi-color:var(--green); animation-delay:0.05s">
+          <div class="kpi-label">Plan Accuracy</div>
+          <div class="kpi-value">97.3%</div>
+          <div class="kpi-delta"><span>▲ +2.1%</span> vs bulan lalu</div>
+        </div>
+        <div class="kpi" style="--kpi-color:var(--blue); animation-delay:0.1s">
+          <div class="kpi-label">Inventory Accuracy</div>
+          <div class="kpi-value">98.6%</div>
+          <div class="kpi-delta"><span>▲ +0.4%</span> vs bulan lalu</div>
+        </div>
+        <div class="kpi" style="--kpi-color:var(--amber); animation-delay:0.15s">
+          <div class="kpi-label">Stockout Incidents</div>
+          <div class="kpi-value">2</div>
+          <div class="kpi-delta"><span class="neg">▲ +1</span> vs bulan lalu</div>
+        </div>
+        <div class="kpi" style="--kpi-color:var(--green); animation-delay:0.2s">
+          <div class="kpi-label">On-Time Delivery</div>
+          <div class="kpi-value">94.8%</div>
+          <div class="kpi-delta"><span>▲ +1.5%</span> vs bulan lalu</div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="card">
+          <div class="card-title">
+            Output Produksi vs Rencana (Unit/Minggu)
+            <span class="card-badge">LIVE</span>
+          </div>
+          <div class="bar-chart" id="barChart"></div>
+          <div style="display:flex;gap:16px;margin-top:12px;">
+            <div style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--text3)">
+              <div style="width:10px;height:10px;background:var(--green);border-radius:1px"></div> Aktual
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--text3)">
+              <div style="width:10px;height:10px;background:var(--blue);opacity:0.6;border-radius:1px"></div> Rencana
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Status Stok Keseluruhan</div>
+          <div class="donut-wrap">
+            <div class="donut">
+              <svg width="100" height="100" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--border)" stroke-width="12"/>
+                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--green)" stroke-width="12"
+                  stroke-dasharray="200 239" stroke-linecap="round" id="donut1"/>
+                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--amber)" stroke-width="12"
+                  stroke-dasharray="0 239" stroke-dashoffset="-200" id="donut2"/>
+                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--red)" stroke-width="12"
+                  stroke-dasharray="0 239" stroke-dashoffset="-230" id="donut3"/>
+              </svg>
+              <div class="donut-center">
+                <div class="donut-pct">84%</div>
+                <div class="donut-lbl">AMAN</div>
+              </div>
+            </div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Aman (84%) — 147 SKU</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div> Reorder (11%) — 20 SKU</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Kritis (5%) — 8 SKU</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alert banners -->
+      <div class="alert-banner crit">⚠ KRITIS: 3 item di bawah safety stock — Tindakan segera diperlukan</div>
+      <div class="alert-banner warn">◎ PERINGATAN: 5 PO belum dikonfirmasi supplier — Tenggat 3 hari</div>
+      <div class="alert-banner ok">✓ Produksi Minggu 23 selesai 97.3% sesuai rencana</div>
+
+      <div class="card">
+        <div class="card-title">Material Kritis — Perlu Perhatian Segera</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Kode Material</th>
+              <th>Nama Material</th>
+              <th>Stok Saat Ini</th>
+              <th>Safety Stock</th>
+              <th>Coverage</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="critTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- INVENTORY PAGE -->
+    <div id="page-inventory" class="page">
+      <div class="page-header">
+        <div class="page-title">Manajemen Inventaris</div>
+        <div class="page-sub">// 175 SKU AKTIF · LAST SYNC: 08:42:17</div>
+      </div>
+
+      <div class="toolbar">
+        <div class="search-box">
+          <span style="color:var(--text3)">⌕</span>
+          <input type="text" id="searchInput" placeholder="Cari kode material, nama, atau kategori..." oninput="filterInventory()">
+        </div>
+        <button class="btn primary" onclick="addItem()">+ Tambah Item</button>
+        <button class="btn" onclick="exportData()">↓ Export</button>
+      </div>
+
+      <div class="filter-chips">
+        <div class="chip active" onclick="filterChip(this,'all')">Semua (175)</div>
+        <div class="chip" onclick="filterChip(this,'aman')">Aman (147)</div>
+        <div class="chip" onclick="filterChip(this,'reorder')">Reorder (20)</div>
+        <div class="chip" onclick="filterChip(this,'kritis')">Kritis (8)</div>
+        <div class="chip" onclick="filterChip(this,'bahan-baku')">Bahan Baku</div>
+        <div class="chip" onclick="filterChip(this,'wip')">WIP</div>
+        <div class="chip" onclick="filterChip(this,'finished')">Finished Goods</div>
+      </div>
+
+      <div class="card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Kode</th>
+              <th>Nama Material</th>
+              <th>Kategori</th>
+              <th>Stok (Unit)</th>
+              <th>Safety Stock</th>
+              <th>Lead Time</th>
+              <th>Coverage</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="inventoryTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MRP PAGE -->
+    <div id="page-mrp" class="page">
+      <div class="page-header">
+        <div class="page-title">Material Requirements Planning</div>
+        <div class="page-sub">// KALKULASI KEBUTUHAN MATERIAL OTOMATIS</div>
+      </div>
+
+      <div class="mrp-grid">
+        <div class="mrp-card">
+          <div class="card-title">Input Perencanaan Produksi</div>
+          <div class="mrp-form-row">
+            <div class="form-group">
+              <label class="form-label">Target Produksi (Unit)</label>
+              <input class="form-input" id="mrp_target" type="number" value="5000" oninput="calcMRP()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Periode (Hari)</label>
+              <input class="form-input" id="mrp_period" type="number" value="30" oninput="calcMRP()">
+            </div>
+          </div>
+          <div class="mrp-form-row">
+            <div class="form-group">
+              <label class="form-label">Stok Awal (Unit)</label>
+              <input class="form-input" id="mrp_stock" type="number" value="800" oninput="calcMRP()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Safety Stock (%)</label>
+              <input class="form-input" id="mrp_safety" type="number" value="15" oninput="calcMRP()">
+            </div>
+          </div>
+          <div class="mrp-form-row">
+            <div class="form-group">
+              <label class="form-label">Scrap Rate (%)</label>
+              <input class="form-input" id="mrp_scrap" type="number" value="2" oninput="calcMRP()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Lead Time (Hari)</label>
+              <input class="form-input" id="mrp_lead" type="number" value="7" oninput="calcMRP()">
+            </div>
+          </div>
+
+          <div class="mrp-result" id="mrpResult"></div>
+        </div>
+
+        <div class="mrp-card">
+          <div class="card-title">Jadwal Pemesanan Material</div>
+          <table class="data-table" id="mrpSchedule">
+            <thead><tr><th>Minggu</th><th>Kebutuhan</th><th>Stok</th><th>Order Qty</th><th>Status</th></tr></thead>
+            <tbody id="mrpScheduleBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRODUKSI PAGE -->
+    <div id="page-produksi" class="page">
+      <div class="page-header">
+        <div class="page-title">Monitoring Produksi</div>
+        <div class="page-sub">// STATUS LINE PRODUKSI REAL-TIME</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+        <div class="card" id="line1card">
+          <div class="card-title">LINE PRODUKSI A <span class="card-badge" id="l1badge">JALAN</span></div>
+          <div style="font-size:36px;font-weight:800;color:var(--green);margin:10px 0" id="l1out">2,140</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:12px">UNIT HARI INI</div>
+          <div style="margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:4px"><span>EFISIENSI</span><span id="l1eff">89%</span></div>
+            <div class="progress-bar" style="width:100%"><div class="progress-fill green" id="l1bar" style="width:89%"></div></div>
+          </div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Target: 2,400 unit · Sisa: <span id="l1rem">260</span> unit</div>
+        </div>
+        <div class="card">
+          <div class="card-title">LINE PRODUKSI B <span class="card-badge" style="background:var(--amber-dim);color:var(--amber)">LAMBAT</span></div>
+          <div style="font-size:36px;font-weight:800;color:var(--amber);margin:10px 0">1,820</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:12px">UNIT HARI INI</div>
+          <div style="margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:4px"><span>EFISIENSI</span><span>76%</span></div>
+            <div class="progress-bar" style="width:100%"><div class="progress-fill amber" style="width:76%"></div></div>
+          </div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Target: 2,400 unit · Sisa: 580 unit</div>
+        </div>
+        <div class="card">
+          <div class="card-title">LINE PRODUKSI C <span class="card-badge" style="background:var(--red-dim);color:var(--red)">BERHENTI</span></div>
+          <div style="font-size:36px;font-weight:800;color:var(--red);margin:10px 0">960</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:12px">UNIT HARI INI</div>
+          <div style="margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:4px"><span>EFISIENSI</span><span>40%</span></div>
+            <div class="progress-bar" style="width:100%"><div class="progress-fill red" style="width:40%"></div></div>
+          </div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--amber)">⚠ Mesin breakdown — Tim teknisi dipanggil</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LAPORAN PAGE -->
+    <div id="page-laporan" class="page">
+      <div class="page-header">
+        <div class="page-title">Laporan & Analitik</div>
+        <div class="page-sub">// RINGKASAN PERFORMA OPERASIONAL</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="card">
+          <div class="card-title">Tren Akurasi Inventaris (6 Bulan)</div>
+          <div class="bar-chart" id="trendChart" style="height:100px"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Top 5 Material Perputaran Tercepat</div>
+          <table class="data-table">
+            <thead><tr><th>Material</th><th>Perputaran/Bulan</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>RM-0041 Tepung Terigu</td><td>8.2x</td><td><span class="badge ok">FAST</span></td></tr>
+              <tr><td>RM-0023 Gula Pasir</td><td>7.6x</td><td><span class="badge ok">FAST</span></td></tr>
+              <tr><td>PKG-012 Karton Box</td><td>6.9x</td><td><span class="badge ok">FAST</span></td></tr>
+              <tr><td>RM-0055 Mentega</td><td>5.4x</td><td><span class="badge warn">MED</span></td></tr>
+              <tr><td>RM-0067 Perisa Vanili</td><td>4.1x</td><td><span class="badge warn">MED</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card" style="grid-column:1/-1">
+          <div class="card-title">KPI Summary — Q2 2026</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:8px;">
+            <div style="text-align:center">
+              <div style="font-size:28px;font-weight:800;color:var(--green)">97.3%</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">PLAN ACCURACY</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:28px;font-weight:800;color:var(--green)">98.6%</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">INV ACCURACY</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:28px;font-weight:800;color:var(--amber)">18 hari</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">AVG COVERAGE</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:28px;font-weight:800;color:var(--green)">94.8%</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">ON-TIME DELIVERY</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:28px;font-weight:800;color:var(--green)">-30%</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">STOCKOUT REDUCTION</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<div class="footer-bar">
+  <span>PPIC-ICS · Sistem Manajemen Produksi & Inventaris</span>
+  <span>Dibuat oleh: <span class="footer-tag">Nurhidayat Catur Prasetiyo</span> · PPIC Specialist</span>
+  <span class="footer-tag">v2.4.1</span>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// Clock
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+setInterval(updateClock, 1000); updateClock();
+
+// Navigation
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  el.classList.add('active');
+  if(id==='mrp') calcMRP();
+  if(id==='laporan') renderTrend();
+}
+
+// Inventory data
+const inventoryData = [
+  { code:'RM-0041', name:'Tepung Terigu Premium', cat:'Bahan Baku', stock:4200, safety:2000, lead:5, status:'aman' },
+  { code:'RM-0023', name:'Gula Pasir Kristal', cat:'Bahan Baku', stock:1800, safety:1500, lead:4, status:'reorder' },
+  { code:'RM-0055', name:'Mentega Sapi', cat:'Bahan Baku', stock:320, safety:800, lead:7, status:'kritis' },
+  { code:'RM-0067', name:'Perisa Vanili', cat:'Bahan Baku', stock:95, safety:300, lead:14, status:'kritis' },
+  { code:'RM-0088', name:'Telur Ayam', cat:'Bahan Baku', stock:6500, safety:3000, lead:2, status:'aman' },
+  { code:'WIP-012', name:'Adonan Kue Dasar', cat:'WIP', stock:2200, safety:1000, lead:1, status:'aman' },
+  { code:'WIP-018', name:'Roti Setengah Jadi', cat:'WIP', stock:880, safety:600, lead:1, status:'reorder' },
+  { code:'FG-001', name:'Mini Bun Cokelat', cat:'Finished Goods', stock:15400, safety:8000, lead:0, status:'aman' },
+  { code:'FG-002', name:'Steamed Bun Keju', cat:'Finished Goods', stock:9200, safety:5000, lead:0, status:'aman' },
+  { code:'PKG-012', name:'Karton Box 24pcs', cat:'Packaging', stock:3800, safety:4000, lead:3, status:'reorder' },
+  { code:'PKG-008', name:'Plastik Wrapping', cat:'Packaging', stock:12000, safety:5000, lead:3, status:'aman' },
+  { code:'RM-0031', name:'Susu Bubuk Full Cream', cat:'Bahan Baku', stock:450, safety:600, lead:10, status:'kritis' },
+];
+
+let currentFilter = 'all';
+
+function calcCoverage(stock, safety) {
+  const ratio = stock / safety;
+  if(ratio >= 2) return { days: Math.round(ratio*7)+'h', cls:'green' };
+  if(ratio >= 1) return { days: Math.round(ratio*7)+'h', cls:'amber' };
+  return { days: Math.round(ratio*7)+'h', cls:'red' };
+}
+
+function renderInventory(data) {
+  const tb = document.getElementById('inventoryTable');
+  tb.innerHTML = data.map(d => {
+    const cov = calcCoverage(d.stock, d.safety);
+    const pct = Math.min(100, Math.round(d.stock/d.safety*100));
+    const statusMap = {aman:'ok',reorder:'warn',kritis:'crit'};
+    const statusLabel = {aman:'AMAN',reorder:'REORDER',kritis:'KRITIS'};
+    return `<tr>
+      <td>${d.code}</td>
+      <td style="color:var(--text)">${d.name}</td>
+      <td><span class="badge" style="background:rgba(96,165,250,0.1);color:var(--blue);border-color:rgba(96,165,250,0.2)">${d.cat}</span></td>
+      <td style="font-family:var(--mono)">${d.stock.toLocaleString()}</td>
+      <td style="font-family:var(--mono);color:var(--text3)">${d.safety.toLocaleString()}</td>
+      <td style="font-family:var(--mono)">${d.lead}h</td>
+      <td><div class="progress-bar"><div class="progress-fill ${cov.cls}" style="width:${pct}%"></div></div></td>
+      <td><span class="badge ${statusMap[d.status]}">${statusLabel[d.status]}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterInventory() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  let filtered = inventoryData;
+  if(currentFilter !== 'all') filtered = filtered.filter(d => d.status === currentFilter || d.cat.toLowerCase().includes(currentFilter));
+  if(q) filtered = filtered.filter(d => d.code.toLowerCase().includes(q) || d.name.toLowerCase().includes(q) || d.cat.toLowerCase().includes(q));
+  renderInventory(filtered);
+}
+
+function filterChip(el, val) {
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  currentFilter = val;
+  filterInventory();
+}
+
+function addItem() {
+  alert('Fitur tambah item: Dalam implementasi nyata, ini akan membuka form input material baru ke database.');
+}
+function exportData() {
+  alert('Export data: CSV/Excel akan diunduh dengan data inventaris terkini.');
+}
+
+renderInventory(inventoryData);
+
+// Critical table (dashboard)
+const critItems = inventoryData.filter(d => d.status === 'kritis' || d.status === 'reorder').slice(0,6);
+document.getElementById('critTable').innerHTML = critItems.map(d => {
+  const pct = Math.min(100, Math.round(d.stock/d.safety*100));
+  const statusMap = {aman:'ok',reorder:'warn',kritis:'crit'};
+  const statusLabel = {aman:'AMAN',reorder:'REORDER',kritis:'KRITIS'};
+  return `<tr>
+    <td>${d.code}</td>
+    <td style="color:var(--text)">${d.name}</td>
+    <td style="font-family:var(--mono)">${d.stock.toLocaleString()}</td>
+    <td style="font-family:var(--mono);color:var(--text3)">${d.safety.toLocaleString()}</td>
+    <td><div class="progress-bar"><div class="progress-fill ${d.status==='kritis'?'red':'amber'}" style="width:${pct}%"></div></div></td>
+    <td><span class="badge ${statusMap[d.status]}">${statusLabel[d.status]}</span></td>
+  </tr>`;
+}).join('');
+
+// Bar chart (dashboard)
+const weeks = ['M1','M2','M3','M4','M5','M6','M7','M8'];
+const actual = [88,92,85,97,91,95,89,94];
+const plan   = [90,90,90,90,90,92,90,92];
+const bc = document.getElementById('barChart');
+bc.innerHTML = weeks.map((w,i) => `
+  <div class="bar-group">
+    <div class="bar-wrap" style="gap:2px;align-items:flex-end">
+      <div class="bar" style="height:${actual[i]}%;flex:1"></div>
+      <div class="bar plan" style="height:${plan[i]}%;flex:1"></div>
+    </div>
+    <div class="bar-label">${w}</div>
+  </div>
+`).join('');
+
+// Trend chart (laporan)
+function renderTrend() {
+  const months = ['Jan','Feb','Mar','Apr','Mei','Jun'];
+  const vals = [94,95,96,97,98,98.6];
+  const tc = document.getElementById('trendChart');
+  tc.innerHTML = months.map((m,i) => `
+    <div class="bar-group">
+      <div class="bar-wrap">
+        <div class="bar" style="height:${(vals[i]-90)*20}%;flex:1"></div>
+      </div>
+      <div class="bar-label">${m}</div>
+    </div>
+  `).join('');
+}
+
+// MRP Calculator
+function calcMRP() {
+  const target = parseInt(document.getElementById('mrp_target').value)||0;
+  const period = parseInt(document.getElementById('mrp_period').value)||30;
+  const stock  = parseInt(document.getElementById('mrp_stock').value)||0;
+  const safety = parseInt(document.getElementById('mrp_safety').value)||15;
+  const scrap  = parseInt(document.getElementById('mrp_scrap').value)||0;
+  const lead   = parseInt(document.getElementById('mrp_lead').value)||0;
+
+  const grossReq = Math.ceil(target * (1 + scrap/100));
+  const safetyStock = Math.ceil(target * (safety/100));
+  const netReq = Math.max(0, grossReq + safetyStock - stock);
+  const dailyRate = Math.ceil(target/period);
+  const orderPoint = Math.ceil(dailyRate * lead + safetyStock);
+
+  document.getElementById('mrpResult').innerHTML = `
+    <div class="mrp-result-row"><span class="key">Kebutuhan Kotor</span><span class="val">${grossReq.toLocaleString()} unit</span></div>
+    <div class="mrp-result-row"><span class="key">Safety Stock</span><span class="val">${safetyStock.toLocaleString()} unit</span></div>
+    <div class="mrp-result-row"><span class="key">Stok Awal</span><span class="val">${stock.toLocaleString()} unit</span></div>
+    <div class="mrp-result-row"><span class="key">Kebutuhan Bersih (Net Req)</span><span class="val" style="color:var(--amber)">${netReq.toLocaleString()} unit</span></div>
+    <div class="mrp-result-row"><span class="key">Laju Harian</span><span class="val">${dailyRate.toLocaleString()} unit/hari</span></div>
+    <div class="mrp-result-row"><span class="key">Reorder Point</span><span class="val" style="color:var(--red)">${orderPoint.toLocaleString()} unit</span></div>
+  `;
+
+  // Schedule table
+  let runStock = stock;
+  const weeklyNeed = Math.ceil(target / (period/7));
+  const rows = Array.from({length: Math.ceil(period/7)}, (_,i) => {
+    const orderQty = runStock < orderPoint ? netReq : 0;
+    if(orderQty > 0) runStock += orderQty;
+    const ending = runStock - weeklyNeed;
+    const status = ending < safetyStock/4 ? `<span class="badge crit">ORDER</span>` :
+                   ending < safetyStock/2 ? `<span class="badge warn">PERHATIAN</span>` :
+                   `<span class="badge ok">AMAN</span>`;
+    runStock = Math.max(0, ending);
+    return `<tr>
+      <td>Minggu ${i+1}</td>
+      <td style="font-family:var(--mono)">${weeklyNeed.toLocaleString()}</td>
+      <td style="font-family:var(--mono)">${Math.max(0,ending).toLocaleString()}</td>
+      <td style="font-family:var(--mono);color:${orderQty>0?'var(--amber)':'var(--text3)'}">${orderQty > 0 ? orderQty.toLocaleString() : '—'}</td>
+      <td>${status}</td>
+    </tr>`;
+  });
+  document.getElementById('mrpScheduleBody').innerHTML = rows.join('');
+}
+calcMRP();
+
+// Live production line simulation
+let l1 = 2140;
+setInterval(() => {
+  l1 += Math.floor(Math.random()*15);
+  const eff = Math.min(99, Math.round(l1/2400*100));
+  document.getElementById('l1out').textContent = l1.toLocaleString();
+  document.getElementById('l1eff').textContent = eff+'%';
+  document.getElementById('l1bar').style.width = eff+'%';
+  document.getElementById('l1rem').textContent = Math.max(0, 2400-l1).toLocaleString();
+}, 3000);
+</script>
+</body>
+</html>
